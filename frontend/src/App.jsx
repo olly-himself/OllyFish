@@ -136,7 +136,7 @@ export default function App() {
           <div className="results-header">
             <span>
               {leads.length} {enriched ? 'contacts' : 'companies'} found for <strong>{expoName}</strong>
-              {enriched && <span className="badge">Apollo enriched</span>}
+              {enriched && <span className="badge">Enriched</span>}
             </span>
             <button className="download-btn" onClick={() => downloadCsv(leads, enriched)}>
               Download CSV
