@@ -14,6 +14,7 @@
   opacity: 0.13;
   animation-timing-function: linear;
   animation-iteration-count: infinite;
+  animation-fill-mode: backwards;
   filter: drop-shadow(0 0 6px rgba(108, 99, 255, 0.4));
 }
 
