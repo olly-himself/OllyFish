@@ -6,6 +6,7 @@ async function extractExhibitors(page, pageUrl) {
   return page.evaluate((baseUrl) => {
     const results = [];
     const seen = new Set();
+    const pageHost = new URL(baseUrl).hostname;
 
     const candidateSelectors = [
       '[class*="exhibitor"]', '[class*="Exhibitor"]',
@@ -29,6 +30,8 @@ async function extractExhibitors(page, pageUrl) {
     const navWords = ['home','menu','search','login','register','sign in','sign up',
       'about','contact','next','prev','previous','more','all','view','back','skip'];
 
+    const profilePattern = /exhibitor|company|brand|vendor|booth|stand|partner|sponsor|profile|detail/i;
+
     for (const el of bestEls) {
       let name = '';
       const heading = el.querySelector(
@@ -51,7 +54,6 @@ async function extractExhibitors(page, pageUrl) {
         for (const a of links) {
           try {
             const u = new URL(a.href, baseUrl);
-            const pageHost = new URL(baseUrl).hostname;
             const score = (u.hostname !== pageHost && u.hostname !== '' && !u.hostname.endsWith('.' + pageHost)) ? 10 : -10;
             if (score > bestScore) { bestScore = score; best = a; }
           } catch {}
@@ -71,13 +73,76 @@ async function extractExhibitors(page, pageUrl) {
         } catch { website = ''; }
       }
 
+      // Capture internal profile/detail page link for later enrichment
+      let profileUrl = '';
+      const allLinks = Array.from(el.querySelectorAll('a[href]')).concat(el.tagName === 'A' ? [el] : []);
+      const internalLinks = allLinks.filter(a => {
+        try {
+          const u = new URL(a.href, baseUrl);
+          return u.hostname === pageHost && u.pathname !== new URL(baseUrl).pathname && u.pathname !== '/';
+        } catch { return false; }
+      });
+      const profileLink = internalLinks.find(a => profilePattern.test(a.href)) || internalLinks[0];
+      if (profileLink) profileUrl = profileLink.href;
+
       const key = name.toLowerCase() + '|' + website;
       if (seen.has(key)) continue;
       seen.add(key);
-      results.push({ name, website });
+      results.push({ name, website, profileUrl });
     }
 
     return results;
+  }, pageUrl);
+}
+
+// ─── Detail page website extraction ──────────────────────────────────────────
+
+async function extractWebsiteFromDetailPage(page, pageUrl) {
+  return page.evaluate((baseUrl) => {
+    let pageHost = '';
+    try { pageHost = new URL(baseUrl).hostname; } catch {}
+
+    function cleanUrl(href) {
+      try {
+        const u = new URL(href, baseUrl);
+        if (!['http:', 'https:'].includes(u.protocol)) return null;
+        if (u.hostname === pageHost) return null;
+        ['utm_source','utm_medium','utm_campaign','utm_content','ref'].forEach(p => u.searchParams.delete(p));
+        return u.origin + u.pathname.replace(/\/$/, '');
+      } catch { return null; }
+    }
+
+    // 1. Explicitly labelled website containers
+    const labelSelectors = [
+      '[class*="website"] a', '[class*="web-link"] a', '[class*="url"] a',
+      'a[data-label*="website" i]', 'a[title*="website" i]',
+    ];
+    for (const sel of labelSelectors) {
+      for (const el of document.querySelectorAll(sel)) {
+        const clean = cleanUrl(el.href);
+        if (clean) return clean;
+      }
+    }
+
+    // 2. Links whose visible text says "website" / "visit site" etc.
+    const keywords = ['website', 'visit site', 'visit us', 'company website', 'our website', 'go to website'];
+    for (const a of document.querySelectorAll('a[href]')) {
+      const t = (a.textContent || a.getAttribute('aria-label') || '').trim().toLowerCase();
+      if (keywords.some(k => t === k || t.startsWith(k))) {
+        const clean = cleanUrl(a.href);
+        if (clean) return clean;
+      }
+    }
+
+    // 3. Schema.org organization URL
+    const orgEl = document.querySelector('[itemtype*="Organization"] [itemprop="url"]');
+    if (orgEl) {
+      const href = (orgEl.getAttribute('href') || orgEl.getAttribute('content') || orgEl.textContent || '').trim();
+      const clean = cleanUrl(href);
+      if (clean) return clean;
+    }
+
+    return null;
   }, pageUrl);
 }
 
@@ -97,7 +162,6 @@ function isJunkName(name) {
   const lower = name.toLowerCase().trim();
   if (JUNK_NAMES.has(lower)) return true;
   if (lower.startsWith('sponsor of')) return true;
-  // Long sentences are descriptions, not company names
   if (name.length > 80 && name.includes(' ') && name.split(' ').length > 6) return true;
   return false;
 }
@@ -111,9 +175,8 @@ function cleanLeads(rawLeads, sourceUrl) {
   let sourceDomain = '';
   try { sourceDomain = new URL(sourceUrl).hostname; } catch {}
 
-  // Separate real company rows from junk rows that may carry orphaned websites
-  const companyRows = [];   // { companyName, website, expoName, expoDate, index }
-  const orphanWebsites = []; // { website, index } — real URLs on junk-named rows
+  const companyRows = [];
+  const orphanWebsites = [];
 
   rawLeads.forEach((lead, i) => {
     const external = isExternalUrl(lead.website, sourceDomain) ? lead.website : '';
@@ -124,7 +187,6 @@ function cleanLeads(rawLeads, sourceUrl) {
     }
   });
 
-  // Deduplicate by company name (case-insensitive), keeping best website
   const byName = new Map();
   for (const row of companyRows) {
     const key = row.companyName.toLowerCase();
@@ -135,7 +197,6 @@ function cleanLeads(rawLeads, sourceUrl) {
     }
   }
 
-  // Assign orphaned websites to the nearest preceding company that has no website
   for (const orphan of orphanWebsites) {
     let bestKey = null, bestDist = Infinity;
     for (const [key, company] of byName) {
@@ -207,6 +268,7 @@ async function scrapeExhibitors(url, { expoName, expoDate, headless = true, time
   let pageNum = 0;
 
   try {
+    // Phase 1: scrape all listing pages
     while (currentUrl && pageNum < maxPages) {
       pageNum++;
       onProgress(`Scraping page ${pageNum}…`);
@@ -226,7 +288,7 @@ async function scrapeExhibitors(url, { expoName, expoDate, headless = true, time
         const key = ex.name.toLowerCase() + '|' + ex.website;
         if (!seenKeys.has(key)) {
           seenKeys.add(key);
-          rawLeads.push({ companyName: ex.name, website: ex.website, expoName, expoDate });
+          rawLeads.push({ companyName: ex.name, website: ex.website, profileUrl: ex.profileUrl, expoName, expoDate });
           newCount++;
         }
       }
@@ -239,9 +301,31 @@ async function scrapeExhibitors(url, { expoName, expoDate, headless = true, time
         break;
       }
     }
+
+    // Phase 2: visit individual exhibitor pages to recover missing websites
+    const needsProfile = rawLeads.filter(l => !l.website && l.profileUrl);
+    if (needsProfile.length > 0) {
+      onProgress(`Visiting ${needsProfile.length} exhibitor pages to find missing websites…`);
+      let done = 0, found = 0;
+      for (const lead of needsProfile) {
+        try {
+          await page.goto(lead.profileUrl, { waitUntil: 'domcontentloaded', timeout });
+          await page.waitForTimeout(800);
+          const website = await extractWebsiteFromDetailPage(page, lead.profileUrl);
+          if (website) { lead.website = website; found++; }
+        } catch {}
+        done++;
+        if (done % 25 === 0 || done === needsProfile.length) {
+          onProgress(`Profile pages: ${done}/${needsProfile.length} visited — ${found} websites found`);
+        }
+      }
+    }
   } finally {
     await browser.close();
   }
+
+  // Strip internal field before post-processing
+  rawLeads.forEach(l => delete l.profileUrl);
 
   const leads = cleanLeads(rawLeads, url);
   onProgress(`Cleaned to ${leads.length} unique companies`);
