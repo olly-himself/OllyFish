@@ -1,5 +1,42 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ── Swimming fish ── */
+.fish-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.fish {
+  position: absolute;
+  opacity: 0.13;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  filter: drop-shadow(0 0 6px rgba(108, 99, 255, 0.4));
+}
+
+@keyframes swim-right {
+  0%   { left: -120px; transform: scaleX(1)   translateY(0);      }
+  20%  {               transform: scaleX(1)   translateY(-12px);  }
+  40%  {               transform: scaleX(1)   translateY(8px);    }
+  60%  {               transform: scaleX(1)   translateY(-8px);   }
+  80%  {               transform: scaleX(1)   translateY(10px);   }
+  100% { left: calc(100vw + 120px); transform: scaleX(1) translateY(0); }
+}
+
+@keyframes swim-left {
+  0%   { left: calc(100vw + 120px); transform: scaleX(-1) translateY(0);     }
+  20%  {                             transform: scaleX(-1) translateY(-12px); }
+  40%  {                             transform: scaleX(-1) translateY(8px);   }
+  60%  {                             transform: scaleX(-1) translateY(-8px);  }
+  80%  {                             transform: scaleX(-1) translateY(10px);  }
+  100% { left: -120px;              transform: scaleX(-1) translateY(0);     }
+}
+
+.app { position: relative; z-index: 1; }
+
 :root {
   --bg: #0f1117;
   --surface: #1a1d27;

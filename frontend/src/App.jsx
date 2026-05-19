@@ -54,8 +54,35 @@ export default function App() {
     }
   }
 
+  const fish = [
+    { id: 1, top: '8%',  size: 60,  duration: 18, delay: 0,   dir: 1  },
+    { id: 2, top: '22%', size: 40,  duration: 24, delay: 5,   dir: -1 },
+    { id: 3, top: '45%', size: 75,  duration: 14, delay: 2,   dir: 1  },
+    { id: 4, top: '63%', size: 35,  duration: 28, delay: 9,   dir: -1 },
+    { id: 5, top: '78%', size: 55,  duration: 20, delay: 13,  dir: 1  },
+    { id: 6, top: '35%', size: 30,  duration: 32, delay: 7,   dir: -1 },
+    { id: 7, top: '90%', size: 50,  duration: 16, delay: 18,  dir: 1  },
+  ]
+
   return (
     <div className="app">
+      <div className="fish-layer" aria-hidden="true">
+        {fish.map(f => (
+          <img
+            key={f.id}
+            src="/OllyFish.png"
+            className="fish"
+            style={{
+              top: f.top,
+              width: f.size,
+              animationDuration: `${f.duration}s`,
+              animationDelay: `${f.delay}s`,
+              animationName: f.dir === 1 ? 'swim-right' : 'swim-left',
+              transform: f.dir === -1 ? 'scaleX(-1)' : undefined,
+            }}
+          />
+        ))}
+      </div>
       <header>
         <h1>OllyFish</h1>
         <p>Paste an expo exhibitor directory URL and get a CSV ready for Apollo.io</p>
