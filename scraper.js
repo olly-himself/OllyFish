@@ -120,7 +120,11 @@ async function autoScroll(page, pauseMs) {
  * @returns {Promise<Array<{ companyName: string, website: string, expoName: string, expoDate: string }>>}
  */
 async function scrapeExhibitors(url, { expoName, expoDate, headless = true, timeout = 30000, scrollPause = 1500, maxPages = 20, onProgress = () => {} }) {
-  const browser = await chromium.launch({ headless });
+  const browser = await chromium.launch({
+    headless,
+    executablePath: process.env.CHROMIUM_PATH || undefined,
+    args: process.env.CHROMIUM_PATH ? ['--no-sandbox', '--disable-setuid-sandbox'] : [],
+  });
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     viewport: { width: 1280, height: 900 },
