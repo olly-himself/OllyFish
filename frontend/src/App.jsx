@@ -90,7 +90,7 @@ export default function App() {
 
       <header>
         <h1>OllyFish</h1>
-        <p>Scrape expo exhibitor directories and find decision-maker contacts</p>
+        <p>A neat little fishing project for finding the biggest fish. (made by olly)</p>
       </header>
 
       <form onSubmit={handleSubmit} className="scrape-form">
