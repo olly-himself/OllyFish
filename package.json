@@ -1,0 +1,21 @@
+{
+  "name": "ollyfish",
+  "version": "1.0.0",
+  "description": "Scrape trade show exhibitor directories and output Apollo.io-ready CSVs",
+  "main": "scrape.js",
+  "bin": {
+    "ollyfish": "./scrape.js"
+  },
+  "scripts": {
+    "scrape": "node scrape.js"
+  },
+  "keywords": [],
+  "author": "olly-himself",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "commander": "^14.0.3",
+    "csv-writer": "^1.6.0",
+    "playwright": "^1.60.0"
+  }
+}
