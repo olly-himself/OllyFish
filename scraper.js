@@ -81,6 +81,79 @@ async function extractExhibitors(page, pageUrl) {
   }, pageUrl);
 }
 
+// ─── Post-processing ──────────────────────────────────────────────────────────
+
+const JUNK_NAMES = new Set([
+  'stand', 'add to plan', 'brands', 'brand', 'categories', 'category',
+  'case studies', 'case study', 'brochure', 'white paper', 'press release',
+  'connect', 'new exhibitor', 'exhibitor directory', 'keynote stage',
+  'startup showcase', 'deep dive stage', 'technology showcase theatre',
+  'other', 'exhibitor details', 'website', 'visit website', 'more info',
+  'video', 'videos', 'document', 'documents', 'resources',
+]);
+
+function isJunkName(name) {
+  if (!name) return true;
+  const lower = name.toLowerCase().trim();
+  if (JUNK_NAMES.has(lower)) return true;
+  if (lower.startsWith('sponsor of')) return true;
+  // Long sentences are descriptions, not company names
+  if (name.length > 80 && name.includes(' ') && name.split(' ').length > 6) return true;
+  return false;
+}
+
+function isExternalUrl(url, sourceDomain) {
+  if (!url) return false;
+  try { return new URL(url).hostname !== sourceDomain; } catch { return false; }
+}
+
+function cleanLeads(rawLeads, sourceUrl) {
+  let sourceDomain = '';
+  try { sourceDomain = new URL(sourceUrl).hostname; } catch {}
+
+  // Separate real company rows from junk rows that may carry orphaned websites
+  const companyRows = [];   // { companyName, website, expoName, expoDate, index }
+  const orphanWebsites = []; // { website, index } — real URLs on junk-named rows
+
+  rawLeads.forEach((lead, i) => {
+    const external = isExternalUrl(lead.website, sourceDomain) ? lead.website : '';
+    if (isJunkName(lead.companyName)) {
+      if (external) orphanWebsites.push({ website: external, index: i });
+    } else {
+      companyRows.push({ ...lead, website: external, index: i });
+    }
+  });
+
+  // Deduplicate by company name (case-insensitive), keeping best website
+  const byName = new Map();
+  for (const row of companyRows) {
+    const key = row.companyName.toLowerCase();
+    if (!byName.has(key)) {
+      byName.set(key, row);
+    } else if (!byName.get(key).website && row.website) {
+      byName.get(key).website = row.website;
+    }
+  }
+
+  // Assign orphaned websites to the nearest preceding company that has no website
+  for (const orphan of orphanWebsites) {
+    let bestKey = null, bestDist = Infinity;
+    for (const [key, company] of byName) {
+      if (!company.website && company.index < orphan.index) {
+        const dist = orphan.index - company.index;
+        if (dist < bestDist && dist <= 10) { bestDist = dist; bestKey = key; }
+      }
+    }
+    if (bestKey) byName.get(bestKey).website = orphan.website;
+  }
+
+  return Array.from(byName.values()).map(({ companyName, website, expoName, expoDate }) => ({
+    companyName, website, expoName, expoDate,
+  }));
+}
+
+// ─── Pagination / scroll helpers ──────────────────────────────────────────────
+
 async function findNextPageUrl(page) {
   return page.evaluate(() => {
     const selectors = [
@@ -114,11 +187,8 @@ async function autoScroll(page, pauseMs) {
   }, pauseMs);
 }
 
-/**
- * @param {string} url
- * @param {{ expoName: string, expoDate: string, headless?: boolean, timeout?: number, scrollPause?: number, maxPages?: number, onProgress?: (msg: string) => void }} opts
- * @returns {Promise<Array<{ companyName: string, website: string, expoName: string, expoDate: string }>>}
- */
+// ─── Main export ──────────────────────────────────────────────────────────────
+
 async function scrapeExhibitors(url, { expoName, expoDate, headless = true, timeout = 30000, scrollPause = 1500, maxPages = 20, onProgress = () => {} }) {
   const browser = await chromium.launch({
     headless,
@@ -131,7 +201,7 @@ async function scrapeExhibitors(url, { expoName, expoDate, headless = true, time
   });
   const page = await context.newPage();
 
-  const allLeads = [];
+  const rawLeads = [];
   const seenKeys = new Set();
   let currentUrl = url;
   let pageNum = 0;
@@ -156,11 +226,11 @@ async function scrapeExhibitors(url, { expoName, expoDate, headless = true, time
         const key = ex.name.toLowerCase() + '|' + ex.website;
         if (!seenKeys.has(key)) {
           seenKeys.add(key);
-          allLeads.push({ companyName: ex.name, website: ex.website, expoName, expoDate });
+          rawLeads.push({ companyName: ex.name, website: ex.website, expoName, expoDate });
           newCount++;
         }
       }
-      onProgress(`Page ${pageNum}: ${newCount} new leads (${allLeads.length} total)`);
+      onProgress(`Page ${pageNum}: ${newCount} entries collected (${rawLeads.length} total)`);
 
       const nextHref = await findNextPageUrl(page);
       if (nextHref) {
@@ -173,7 +243,9 @@ async function scrapeExhibitors(url, { expoName, expoDate, headless = true, time
     await browser.close();
   }
 
-  return allLeads;
+  const leads = cleanLeads(rawLeads, url);
+  onProgress(`Cleaned to ${leads.length} unique companies`);
+  return leads;
 }
 
 module.exports = { scrapeExhibitors };
