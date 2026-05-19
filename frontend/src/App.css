@@ -1,40 +1,17 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* ── Water background ── */
-body::before,
-body::after {
+body::before {
   content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
-}
-
-body::before {
   background:
     radial-gradient(ellipse at 20% 50%, rgba(6, 50, 90, 0.5) 0%, transparent 60%),
     radial-gradient(ellipse at 80% 20%, rgba(0, 80, 100, 0.4) 0%, transparent 55%),
     radial-gradient(ellipse at 60% 80%, rgba(10, 40, 80, 0.4) 0%, transparent 50%);
   animation: water-drift 14s ease-in-out infinite alternate;
-}
-
-body::after {
-  background-image:
-    repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 48px,
-      rgba(255,255,255,0.015) 48px,
-      rgba(255,255,255,0.015) 50px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 80px,
-      rgba(255,255,255,0.01) 80px,
-      rgba(255,255,255,0.01) 82px
-    );
-  animation: water-shimmer 8s ease-in-out infinite alternate;
 }
 
 @keyframes water-drift {
@@ -44,11 +21,6 @@ body::after {
   100% { transform: scale(1.03) translate(-1%,  2%);   opacity: 0.85;}
 }
 
-@keyframes water-shimmer {
-  0%   { transform: translateY(0)   scaleX(1);    opacity: 1;   }
-  50%  { transform: translateY(-6px) scaleX(1.01); opacity: 0.7; }
-  100% { transform: translateY(4px)  scaleX(0.99); opacity: 0.9; }
-}
 
 /* ── Swimming fish ── */
 .fish-layer {
@@ -105,7 +77,7 @@ body::after {
   background: var(--bg);
 }
 
-body { min-height: 100vh; }
+body { min-height: 100vh; margin: 0; }
 
 .app {
   max-width: 860px;
