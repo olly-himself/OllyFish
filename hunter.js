@@ -64,8 +64,8 @@ async function enrichLeads(leads, apiKey, onProgress = () => {}) {
       }
     }
 
-    // Hunter rate limit: 10 req/s on free, stay safe at ~6/s
-    await delay(180);
+    // Hunter: 1 req/s to stay well inside rate limits on all plans
+    await delay(1100);
   }
 
   return results;
