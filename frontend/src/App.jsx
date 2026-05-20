@@ -4,20 +4,13 @@ import './App.css'
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 const API_KEY = import.meta.env.VITE_API_KEY || ''
 
-function downloadCsv(leads, enriched) {
-  const header = enriched
-    ? 'Company Name,Website,Contact Name,Job Title,Email,LinkedIn,Expo Name,Expo Date'
-    : 'Company Name,Website,Expo Name,Expo Date'
-  const rows = leads.map(l => {
-    const base = [l.companyName, l.website, l.expoName, l.expoDate]
-    const contact = enriched
-      ? [l.contactName, l.contactTitle, l.contactEmail, l.linkedIn]
-      : []
-    const cols = enriched
-      ? [l.companyName, l.website, l.contactName, l.contactTitle, l.contactEmail, l.linkedIn, l.expoName, l.expoDate]
-      : base
-    return cols.map(v => `"${(v || '').replace(/"/g, '""')}"`).join(',')
-  })
+function downloadCsv(leads) {
+  const header = 'Company Name,Website,Expo Name,Expo Date'
+  const rows = leads.map(l =>
+    [l.companyName, l.website, l.expoName, l.expoDate]
+      .map(v => `"${(v || '').replace(/"/g, '""')}"`)
+      .join(',')
+  )
   const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
@@ -41,7 +34,6 @@ export default function App() {
   const [expoDate, setExpoDate] = useState('')
   const [status, setStatus] = useState('idle')
   const [leads, setLeads] = useState([])
-  const [enriched, setEnriched] = useState(false)
   const [error, setError] = useState('')
   const [progress, setProgress] = useState([])
 
@@ -51,7 +43,6 @@ export default function App() {
     setLeads([])
     setProgress([])
     setError('')
-    setEnriched(false)
 
     try {
       const res = await fetch(`${API_URL}/scrape`, {
@@ -65,7 +56,6 @@ export default function App() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Scrape failed')
       setLeads(data.leads)
-      setEnriched(data.enriched || false)
       setProgress(data.progress || [])
       setStatus('done')
     } catch (err) {
@@ -111,7 +101,7 @@ export default function App() {
           </div>
         </div>
         <button type="submit" disabled={status === 'loading'}>
-          {status === 'loading' ? 'Working…' : 'Scrape & Enrich'}
+          {status === 'loading' ? 'Working…' : 'Scrape'}
         </button>
       </form>
 
@@ -135,10 +125,9 @@ export default function App() {
         <div className="results">
           <div className="results-header">
             <span>
-              {leads.length} {enriched ? 'contacts' : 'companies'} found for <strong>{expoName}</strong>
-              {enriched && <span className="badge">Enriched</span>}
+              {leads.length} companies found for <strong>{expoName}</strong>
             </span>
-            <button className="download-btn" onClick={() => downloadCsv(leads, enriched)}>
+            <button className="download-btn" onClick={() => downloadCsv(leads)}>
               Download CSV
             </button>
           </div>
@@ -148,46 +137,22 @@ export default function App() {
                 <tr>
                   <th>#</th>
                   <th>Company</th>
-                  {enriched && <th>Contact</th>}
-                  {enriched && <th>Title</th>}
-                  {enriched && <th>Email</th>}
-                  {!enriched && <th>Website</th>}
+                  <th>Website</th>
                 </tr>
               </thead>
               <tbody>
                 {leads.map((lead, i) => (
                   <tr key={i}>
                     <td className="row-num">{i + 1}</td>
+                    <td className="company-name">{lead.companyName}</td>
                     <td>
-                      <div className="company-name">{lead.companyName}</div>
-                      {enriched && lead.website && (
-                        <a className="company-url" href={lead.website} target="_blank" rel="noreferrer">
-                          {lead.website.replace(/^https?:\/\/(www\.)?/, '')}
-                        </a>
-                      )}
+                      {lead.website
+                        ? <a href={lead.website} target="_blank" rel="noreferrer">
+                            {lead.website.replace(/^https?:\/\/(www\.)?/, '')}
+                          </a>
+                        : <span className="muted">—</span>
+                      }
                     </td>
-                    {enriched && (
-                      <td>{lead.contactName || <span className="muted">—</span>}</td>
-                    )}
-                    {enriched && (
-                      <td className="muted">{lead.contactTitle || '—'}</td>
-                    )}
-                    {enriched && (
-                      <td>
-                        {lead.contactEmail
-                          ? <a href={`mailto:${lead.contactEmail}`}>{lead.contactEmail}</a>
-                          : <span className="muted">—</span>
-                        }
-                      </td>
-                    )}
-                    {!enriched && (
-                      <td>
-                        {lead.website
-                          ? <a href={lead.website} target="_blank" rel="noreferrer">{lead.website}</a>
-                          : <span className="muted">—</span>
-                        }
-                      </td>
-                    )}
                   </tr>
                 ))}
               </tbody>
