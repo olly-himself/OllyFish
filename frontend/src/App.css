@@ -250,6 +250,70 @@ button[type="submit"]:disabled {
   background: var(--bg);
 }
 
+/* ── Clay panel ── */
+.clay-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.clay-fields { display: flex; gap: 16px; }
+
+.clay-btn {
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: background 0.15s, opacity 0.15s;
+}
+.clay-btn:hover:not(:disabled) { background: var(--accent-hover); }
+.clay-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.clay-sending { display: flex; flex-direction: column; gap: 10px; }
+
+.clay-sending-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.clay-bar-track {
+  height: 6px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.clay-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 99px;
+  transition: width 0.3s ease;
+}
+
+.clay-company { font-size: 12px; }
+
+.clay-done {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.clay-tick { color: var(--success); font-size: 18px; font-weight: 700; }
+.clay-failed { color: #f87171; font-size: 13px; }
+
 .table-wrap {
   border: 1px solid var(--border);
   border-radius: 12px;

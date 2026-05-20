@@ -37,12 +37,22 @@ export default function App() {
   const [error, setError] = useState('')
   const [progress, setProgress] = useState([])
 
+  const [clayUrl, setClayUrl] = useState(() => localStorage.getItem('clayUrl') || '')
+  const [clayToken, setClayToken] = useState(() => localStorage.getItem('clayToken') || '')
+  const [clayStatus, setClayStatus] = useState('idle') // idle | sending | done | error
+  const [claySent, setClaySent] = useState(0)
+  const [clayFailed, setClayFailed] = useState(0)
+  const [clayTotal, setClayTotal] = useState(0)
+  const [clayCompany, setClayCompany] = useState('')
+  const [clayError, setClayError] = useState('')
+
   async function handleSubmit(e) {
     e.preventDefault()
     setStatus('loading')
     setLeads([])
     setProgress([])
     setError('')
+    setClayStatus('idle')
 
     try {
       const res = await fetch(`${API_URL}/scrape`, {
@@ -63,6 +73,63 @@ export default function App() {
       setStatus('error')
     }
   }
+
+  async function handleSendToClay() {
+    if (!clayUrl) return
+    localStorage.setItem('clayUrl', clayUrl)
+    localStorage.setItem('clayToken', clayToken)
+
+    setClayStatus('sending')
+    setClaySent(0)
+    setClayFailed(0)
+    setClayTotal(leads.length)
+    setClayCompany('')
+    setClayError('')
+
+    try {
+      const res = await fetch(`${API_URL}/push-to-clay`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(API_KEY ? { 'x-api-key': API_KEY } : {}),
+        },
+        body: JSON.stringify({ leads, webhookUrl: clayUrl, authToken: clayToken }),
+      })
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const text = decoder.decode(value, { stream: true })
+        for (const line of text.split('\n')) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const data = JSON.parse(line.slice(6))
+            if (data.type === 'progress') {
+              setClaySent(data.sent)
+              setClayFailed(data.failed)
+              setClayCompany(data.company)
+            } else if (data.type === 'done') {
+              setClaySent(data.sent)
+              setClayStatus('done')
+            } else if (data.type === 'error') {
+              setClayError(data.message)
+              setClayStatus('error')
+            }
+          } catch {}
+        }
+      }
+
+      if (clayStatus !== 'error') setClayStatus('done')
+    } catch (err) {
+      setClayError(err.message)
+      setClayStatus('error')
+    }
+  }
+
+  const clayPct = clayTotal > 0 ? Math.round((claySent / clayTotal) * 100) : 0
 
   return (
     <div className="app">
@@ -124,13 +191,65 @@ export default function App() {
       {status === 'done' && (
         <div className="results">
           <div className="results-header">
-            <span>
-              {leads.length} companies found for <strong>{expoName}</strong>
-            </span>
+            <span>{leads.length} companies found for <strong>{expoName}</strong></span>
             <button className="download-btn" onClick={() => downloadCsv(leads)}>
               Download CSV
             </button>
           </div>
+
+          {/* Clay panel */}
+          <div className="clay-panel">
+            {clayStatus === 'idle' && (
+              <>
+                <div className="clay-fields">
+                  <div className="field">
+                    <label>Clay Webhook URL</label>
+                    <input type="url" placeholder="https://api.clay.com/v3/sources/webhook/…"
+                      value={clayUrl}
+                      onChange={e => setClayUrl(e.target.value)} />
+                  </div>
+                  <div className="field">
+                    <label>Auth Token <span className="muted">(optional)</span></label>
+                    <input type="password" placeholder="x-clay-webhook-auth token"
+                      value={clayToken}
+                      onChange={e => setClayToken(e.target.value)} />
+                  </div>
+                </div>
+                <button className="clay-btn" onClick={handleSendToClay} disabled={!clayUrl}>
+                  Send {leads.length} leads to Clay
+                </button>
+              </>
+            )}
+
+            {clayStatus === 'sending' && (
+              <div className="clay-sending">
+                <div className="clay-sending-top">
+                  <div className="spinner" />
+                  <span>Sending to Clay… <strong>{claySent}</strong> of <strong>{clayTotal}</strong></span>
+                  {clayFailed > 0 && <span className="clay-failed">{clayFailed} failed</span>}
+                </div>
+                <div className="clay-bar-track">
+                  <div className="clay-bar-fill" style={{ width: `${clayPct}%` }} />
+                </div>
+                {clayCompany && <div className="clay-company muted">{clayCompany}</div>}
+              </div>
+            )}
+
+            {clayStatus === 'done' && (
+              <div className="clay-done">
+                <span className="clay-tick">✓</span>
+                <span><strong>{claySent}</strong> leads sent to Clay</span>
+                {clayFailed > 0 && <span className="clay-failed">{clayFailed} failed</span>}
+              </div>
+            )}
+
+            {clayStatus === 'error' && (
+              <div className="error-box">
+                <strong>Clay error:</strong> {clayError}
+              </div>
+            )}
+          </div>
+
           <div className="table-wrap">
             <table>
               <thead>

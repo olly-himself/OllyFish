@@ -3,6 +3,7 @@
 const express = require('express');
 const cors = require('cors');
 const { scrapeExhibitors } = require('./scraper');
+const { pushLeads } = require('./clay');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -47,6 +48,33 @@ app.post('/scrape', requireApiKey, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: err.message, progress });
   }
+});
+
+app.post('/push-to-clay', requireApiKey, async (req, res) => {
+  const { leads, webhookUrl, authToken } = req.body;
+
+  if (!leads || !Array.isArray(leads) || !webhookUrl) {
+    return res.status(400).json({ error: 'leads array and webhookUrl are required' });
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+  try {
+    await pushLeads(leads, webhookUrl, authToken || '', ({ sent, failed, total, company }) => {
+      send({ type: 'progress', sent, failed, total, company });
+    });
+    const final = { sent: leads.length, failed: 0 };
+    send({ type: 'done', ...final });
+  } catch (err) {
+    send({ type: 'error', message: err.message });
+  }
+
+  res.end();
 });
 
 app.listen(PORT, () => console.log(`OllyFish API running on port ${PORT}`));
